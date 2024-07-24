@@ -38,12 +38,13 @@ namespace ContosoUniversity.Controllers
                     .ThenInclude(e => e.Course)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.ID == id);
+
             if (student == null)
             {
                 return NotFound();
             }
 
-            return View(student);
+            return View("Details", student);
         }
 
         // GET: Students/Create
