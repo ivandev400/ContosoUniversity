@@ -112,20 +112,25 @@ namespace ContosoUniversity.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditPost(int? id)
+        public async Task<IActionResult> EditPost(int? id, StudentViewModel model)
         {
             if (id == null)
             {
                 return NotFound();
             }
 
-            var studentToUpdate = await _context.Students.FirstOrDefaultAsync(s => s.ID == id);
-
-            if (await TryUpdateModelAsync<Student>(
-                studentToUpdate,
-                "",
-                s => s.FirstMidName, s => s.LastName, s => s.EnrollmentDate))
+            var studentToUpdate = await _context.Students.FindAsync(id);
+            if (studentToUpdate == null)
             {
+                return NotFound();
+            }
+
+            if (ModelState.IsValid)
+            {
+                studentToUpdate.FirstMidName = model.FirstMidName;
+                studentToUpdate.LastName = model.LastName;
+                studentToUpdate.EnrollmentDate = model.EnrollmentDate;
+
                 try
                 {
                     await _context.SaveChangesAsync();
@@ -133,21 +138,13 @@ namespace ContosoUniversity.Controllers
                 }
                 catch (DbUpdateException ex)
                 {
-                    _logger.LogError(ex, "Error occured during database update");
+                    _logger.LogError(ex, "Error occurred during database update");
                     ModelState.AddModelError("", "Unable to save changes. " +
                         "Try again, and if the problem persists, " +
                         "see your system administrator.");
                 }
             }
-            else
-            {
-                // Log or handle model state errors
-                foreach (var error in ModelState.Values.SelectMany(v => v.Errors))
-                {
-                    _logger.LogError(error.ErrorMessage);
-                }
-            }
-            return View(studentToUpdate);
+            return View(model);
         }
 
         // GET: Students/Delete/5
