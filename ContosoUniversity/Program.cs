@@ -1,5 +1,7 @@
 using ContosoUniversity.Data;
+using ContosoUniversity.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection.Emit;
 
 var builder = WebApplication.CreateBuilder(args);
 
