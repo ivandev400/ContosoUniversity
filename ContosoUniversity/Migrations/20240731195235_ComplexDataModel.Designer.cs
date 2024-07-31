@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ContosoUniversity.Migrations
 {
     [DbContext(typeof(SchoolContext))]
-    [Migration("20240729094226_ComplexDataModel")]
+    [Migration("20240731195235_ComplexDataModel")]
     partial class ComplexDataModel
     {
         /// <inheritdoc />
