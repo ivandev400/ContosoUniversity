@@ -7,16 +7,19 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using ContosoUniversity.Data;
 using ContosoUniversity.Models;
+using ContosoUniversity.Controllers.ViewModels;
 
 namespace ContosoUniversity.Controllers
 {
     public class CoursesController : Controller
     {
         private readonly SchoolContext _context;
+        private readonly ILogger<CoursesController> _logger;
 
-        public CoursesController(SchoolContext context)
+        public CoursesController(SchoolContext context, ILogger<CoursesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Courses
@@ -50,7 +53,7 @@ namespace ContosoUniversity.Controllers
         // GET: Courses/Create
         public IActionResult Create()
         {
-            ViewData["DepartmentID"] = new SelectList(_context.Departments, "DepartmentID", "DepartmentID");
+            PopulateDepartmentsDropDownList();
             return View();
         }
 
@@ -59,16 +62,24 @@ namespace ContosoUniversity.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("CourseID,Title,Credits,DepartmentID")] Course course)
+        public async Task<IActionResult> Create(CourseViewModel model)
         {
             if (ModelState.IsValid)
             {
+                var course = new Course
+                {
+                    CourseID = model.CourseID,
+                    Title = model.Title,
+                    Credits = model.Credits,
+                    DepartmentID = model.DepartmentID,
+                };
+
                 _context.Add(course);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["DepartmentID"] = new SelectList(_context.Departments, "DepartmentID", "DepartmentID", course.DepartmentID);
-            return View(course);
+            PopulateDepartmentsDropDownList(model.DepartmentID);
+            return View(model);
         }
 
         // GET: Courses/Edit/5
@@ -79,51 +90,68 @@ namespace ContosoUniversity.Controllers
                 return NotFound();
             }
 
-            var course = await _context.Courses.FindAsync(id);
+            var course = await _context.Courses
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.CourseID == id);
+
             if (course == null)
             {
                 return NotFound();
             }
-            ViewData["DepartmentID"] = new SelectList(_context.Departments, "DepartmentID", "DepartmentID", course.DepartmentID);
+            PopulateDepartmentsDropDownList(course.DepartmentID);
             return View(course);
         }
 
         // POST: Courses/Edit/5
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("CourseID,Title,Credits,DepartmentID")] Course course)
+        public async Task<IActionResult> EditPost(int id, CourseViewModel model)
         {
-            if (id != course.CourseID)
+            if (id == null)
+
             {
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
+            var courseToUpdate = await _context.Courses.FirstOrDefaultAsync(c => c.CourseID == id);
+            if (courseToUpdate == null)
             {
+                return NotFound();
+            }
+            if(ModelState.IsValid)
+            {
+                courseToUpdate.Credits = model.Credits;
+                courseToUpdate.DepartmentID = model.DepartmentID;
+                courseToUpdate.Title = model.Title;
                 try
                 {
-                    _context.Update(course);
                     await _context.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (DbUpdateException ex)
                 {
-                    if (!CourseExists(course.CourseID))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    _logger.LogError(ex, "Error occured during database update");
+                    ModelState.AddModelError("", "Unable to save changes. " +
+                        "Try again, and if the problem persists, " +
+                        "see your system administrator.");
                 }
                 return RedirectToAction(nameof(Index));
             }
-            ViewData["DepartmentID"] = new SelectList(_context.Departments, "DepartmentID", "DepartmentID", course.DepartmentID);
-            return View(course);
+            PopulateDepartmentsDropDownList(courseToUpdate.DepartmentID);
+            return View(courseToUpdate);
         }
 
+        private void PopulateDepartmentsDropDownList(object selectedDepartment = null)
+        {
+            var departmentsQuery = from d in _context.Departments
+                                  orderby d.Name
+                                  select d;
+            ViewBag.DepartmentID = new SelectList(departmentsQuery.AsNoTracking(),
+                                                  "DepartmentID",
+                                                  "Name",
+                                                  selectedDepartment);
+        }
         // GET: Courses/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
