@@ -8,16 +8,19 @@ using Microsoft.EntityFrameworkCore;
 using ContosoUniversity.Data;
 using ContosoUniversity.Models;
 using ContosoUniversity.Models.SchoolViewModels;
+using ContosoUniversity.Controllers.ViewModels;
 
 namespace ContosoUniversity.Controllers
 {
     public class InstructorsController : Controller
     {
         private readonly SchoolContext _context;
+        private readonly ILogger<InstructorsController> _logger;
 
-        public InstructorsController(SchoolContext context)
+        public InstructorsController(SchoolContext context, ILogger<InstructorsController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Instructors
@@ -85,15 +88,22 @@ namespace ContosoUniversity.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ID,LastName,FirstMidName,HireDate")] Instructor instructor)
+        public async Task<IActionResult> Create(InstructorViewModel model)
         {
             if (ModelState.IsValid)
             {
+                var instructor = new Instructor
+                {
+                    FirstMidName = model.FirstMidName,
+                    LastName = model.LastName,
+                    HireDate = model.HireDate
+                };
+
                 _context.Add(instructor);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            return View(instructor);
+            return View(model);
         }
 
         // GET: Instructors/Edit/5
@@ -104,7 +114,11 @@ namespace ContosoUniversity.Controllers
                 return NotFound();
             }
 
-            var instructor = await _context.Instructors.FindAsync(id);
+            var instructor = await _context.Instructors
+                .Include(i => i.OfficeAssignment)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.ID == id);
+
             if (instructor == null)
             {
                 return NotFound();
@@ -115,36 +129,49 @@ namespace ContosoUniversity.Controllers
         // POST: Instructors/Edit/5
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        [HttpPost]
+        [HttpPost, ActionName("Edit")]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ID,LastName,FirstMidName,HireDate")] Instructor instructor)
+        public async Task<IActionResult> EditPost(int id, InstructorViewModel model)
         {
-            if (id != instructor.ID)
+            if (id == null)
             {
                 return NotFound();
             }
 
+            var instructorToUpdate = await _context.Instructors
+                    .Include(i => i.OfficeAssignment)
+                    .FirstOrDefaultAsync(s => s.ID == id);
+
             if (ModelState.IsValid)
             {
+                instructorToUpdate.FirstMidName = model.FirstMidName;
+                instructorToUpdate.LastName = model.LastName;
+                instructorToUpdate.HireDate = model.HireDate;
+                instructorToUpdate.OfficeAssignment = new OfficeAssignment
+                {
+                    InstructorID = instructorToUpdate.ID,
+                    Location = model.OfficeAssignmentLocation,
+                    Instructor = instructorToUpdate,
+                };
+
+                if (String.IsNullOrWhiteSpace(instructorToUpdate.OfficeAssignment?.Location))
+                {
+                    instructorToUpdate.OfficeAssignment = null;
+                }
                 try
                 {
-                    _context.Update(instructor);
                     await _context.SaveChangesAsync();
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (DbUpdateException ex)
                 {
-                    if (!InstructorExists(instructor.ID))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    _logger.LogError(ex, "Error occured during database update");
+                    ModelState.AddModelError("", "Unable to save changes. " +
+                        "Try again, and if the problem persists, " +
+                        "see your system administrator.");
                 }
                 return RedirectToAction(nameof(Index));
             }
-            return View(instructor);
+            return View(model);
         }
 
         // GET: Instructors/Delete/5
